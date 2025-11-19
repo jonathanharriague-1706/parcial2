@@ -7,36 +7,29 @@ public class PlayerMovement : MonoBehaviour
     // ===============================================
     [Header("Referencias de Juego")]
     [Tooltip("Referencia al script del enemigo para forzar la reaparicion.")]
-    public EnemyController enemigo;
+    public EnemyController enemigo; // Esta variable es CRÍTICA
 
     // ===============================================
-    // Variables de Movimiento
+    // Configuración de MOVIMIENTO y SIGILO (Requisitos Parcial 2)
     // ===============================================
-    [Header("Configuracion de Movimiento")]
-    public float velocidadMovimiento = 5f;
-    public float fuerzaSalto = 7f;
-    private bool estaEnTierra;
+    [Header("Configuracion de Movimiento y Sigilo")]
+    public float velocidadBase = 5f;        
+    private float velocidadActual;          
+    
+    // REQUISITOS DE SIGILO
+    public float multiplicadorSigilo = 0.75f; // Reduce la velocidad un 25%
+    public float alturaBase = 2.0f;          // Altura normal del CharacterController
+    public float alturaAgachado = 1.0f;      // 50% de reduccion (si alturaBase es 2.0f)
 
     // ===============================================
-    // Variables de Vida
+    // Variables de Vida (Mantenemos por la logica de DANO y MUERTE)
     // ===============================================
     [Header("Configuracion de Vida")]
     public float vidaActual = 100f; 
     public float vidaMaxima = 100f; 
     
-    // ===============================================
-    // Variables de Stamina
-    // ===============================================
-    [Header("Configuracion de Stamina")]
-    public float staminaActual = 100f;
-    public float staminaMaxima = 100f;
-    public float tasaRegeneracion = 5f;
-    
-    // --- Bandera de control de regeneracion ---
-    private bool puedeRegenerar = true; 
-    private float velocidadBase = 5f; 
-
     // --- Variables de Control Interno ---
+    private bool estaAgachado = false; 
     private CharacterController controlador;
     private Vector3 velocidadVertical;
     
@@ -49,52 +42,33 @@ public class PlayerMovement : MonoBehaviour
         }
         
         vidaActual = vidaMaxima;
-        velocidadBase = velocidadMovimiento; 
+        velocidadActual = velocidadBase; 
+        controlador.height = alturaBase;
+        // NOTA: El agachado está sin corregir aquí, como lo solicitaste.
     }
 
     void Update()
     {
         // ----------------------------------------------------
-        // LOGICA DE REAPARICION (F3)
+        // LOGICA DE SIGILO (AGACHADO)
         // ----------------------------------------------------
-        if (Input.GetKeyDown(KeyCode.F3) && enemigo != null)
+        if (Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.LeftControl))
         {
-            Debug.Log("Jugador detecta F3, llama a Reaparecer.");
-            enemigo.Reaparecer();
+            AlternarAgachado();
         }
         
         // ----------------------------------------------------
-        // LOGICA DE MOVIMIENTO
+        // LOGICA DE MOVIMIENTO (Simple, sin salto, sin correr)
         // ----------------------------------------------------
-        estaEnTierra = controlador.isGrounded;
-
-        if (estaEnTierra && velocidadVertical.y < 0)
-        {
-            velocidadVertical.y = -2f; 
-        }
-
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
 
         Vector3 movimiento = transform.right * x + transform.forward * z;
-        controlador.Move(movimiento * velocidadMovimiento * Time.deltaTime);
+        controlador.Move(movimiento * velocidadActual * Time.deltaTime);
 
-        if (Input.GetButtonDown("Jump") && estaEnTierra)
-        {
-            velocidadVertical.y = Mathf.Sqrt(fuerzaSalto * -2f * Physics.gravity.y);
-        }
-
+        // Aplicar Gravedad
         velocidadVertical.y += Physics.gravity.y * Time.deltaTime;
         controlador.Move(velocidadVertical * Time.deltaTime);
-
-        // ----------------------------------------------------
-        // LOGICA DE STAMINA (REGENERACION CORREGIDA)
-        // ----------------------------------------------------
-        if (puedeRegenerar && staminaActual < staminaMaxima) // SOLO REGENERA SI LA BANDERA ES TRUE
-        {
-            staminaActual += tasaRegeneracion * Time.deltaTime;
-            staminaActual = Mathf.Clamp(staminaActual, 0f, staminaMaxima);
-        }
 
         // ----------------------------------------------------
         // LOGICA DE MUERTE DEL JUGADOR
@@ -102,40 +76,41 @@ public class PlayerMovement : MonoBehaviour
         if (vidaActual <= 0)
         {
             Debug.Log("El jugador ha muerto!");
+            // Aqui puedes reiniciar la escena o cargar un Game Over
         }
-    }
-
-    // ----------------------------------------------------
-    // METODOS DE INTERACCION DEL ENEMIGO
-    // ----------------------------------------------------
-
-    // Llamado cuando el enemigo nos ve: APLICA DAÑO Y DETIENE REGENERACION
-    public void PenalizarStamina(float cantidad)
-    {
-        staminaActual -= cantidad * Time.deltaTime;
-        staminaActual = Mathf.Clamp(staminaActual, 0f, staminaMaxima);
         
-        // Penalizar velocidad si la stamina llega a cero
-        if (staminaActual <= 0)
+        // ----------------------------------------------------
+        // LOGICA DE REAPARICION (F3) <-- CORRECCIÓN SOLICITADA
+        // ----------------------------------------------------
+        if (Input.GetKeyDown(KeyCode.F3) && enemigo != null)
         {
-            velocidadMovimiento = 2f; 
+            enemigo.Reaparecer();
         }
     }
-
-    // NUEVO METODO: Llamado por el enemigo para DETENER la regeneracion.
-    public void DetenerRegeneracion()
+    
+    private void AlternarAgachado()
     {
-        puedeRegenerar = false;
-    }
+        // Lógica de agachado original (sin ajustes de center):
+        estaAgachado = !estaAgachado;
 
-    // NUEVO METODO: Llamado por el enemigo para PERMITIR la regeneracion.
-    public void PermitirRegeneracion()
-    {
-        puedeRegenerar = true;
-        // Restaurar la velocidad cuando se permite regenerar 
-        if (staminaActual > 0)
+        if (estaAgachado)
         {
-            velocidadMovimiento = velocidadBase; 
+            controlador.height = alturaAgachado;
+            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaAgachado / 2f, controlador.center.z);
+            velocidadActual = velocidadBase * multiplicadorSigilo; 
         }
+        else
+        {
+            controlador.height = alturaBase;
+            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaBase / 2f, controlador.center.z);
+            velocidadActual = velocidadBase;
+        }
+    }
+    
+    // --- Metodo de Daño (Mantenemos para que el enemigo pueda interactuar) ---
+    public void RecibirDanio(float cantidad)
+    {
+        vidaActual -= cantidad;
+        Debug.Log($"Vida restante: {vidaActual}");
     }
 }
