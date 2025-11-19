@@ -6,8 +6,8 @@ public class PlayerMovement : MonoBehaviour
     // REQUERIDO: REFERENCIAS DE JUEGO
     // ===============================================
     [Header("Referencias de Juego")]
-    [Tooltip("Referencia al script del enemigo para forzar la reaparicion.")]
-    public EnemyController enemigo; // Esta variable es CRÍTICA
+    // [MODIFICADO] Ahora es un ARRAY para almacenar a TODOS los enemigos de la escena.
+    private EnemyController[] todosLosEnemigos; 
 
     // ===============================================
     // Configuración de MOVIMIENTO y SIGILO (Requisitos Parcial 2)
@@ -41,10 +41,23 @@ public class PlayerMovement : MonoBehaviour
             Debug.LogError("PlayerMovement requiere un CharacterController.");
         }
         
+        // [NUEVO] Encuentra TODOS los objetos activos o inactivos 
+        // con el script EnemyController en la escena al inicio.
+        todosLosEnemigos = FindObjectsByType<EnemyController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        
+        if (todosLosEnemigos.Length == 0)
+        {
+             Debug.LogWarning("No se encontraron objetos con el script EnemyController en la escena. La reaparicion (F3) no funcionara.");
+        }
+        else
+        {
+             Debug.Log($"[INFO] Se encontraron {todosLosEnemigos.Length} enemigos para el sistema de reaparición (F3).");
+        }
+        
         vidaActual = vidaMaxima;
         velocidadActual = velocidadBase; 
         controlador.height = alturaBase;
-        // NOTA: El agachado está sin corregir aquí, como lo solicitaste.
+        // NOTA: El agachado está sin corregir aquí.
     }
 
     void Update()
@@ -80,11 +93,19 @@ public class PlayerMovement : MonoBehaviour
         }
         
         // ----------------------------------------------------
-        // LOGICA DE REAPARICION (F3) <-- CORRECCIÓN SOLICITADA
+        // LOGICA DE REAPARICION DE TODOS LOS ENEMIGOS (F3)
         // ----------------------------------------------------
-        if (Input.GetKeyDown(KeyCode.F3) && enemigo != null)
+        if (Input.GetKeyDown(KeyCode.F3) && todosLosEnemigos != null)
         {
-            enemigo.Reaparecer();
+            // [MODIFICADO] Itera sobre el ARRAY de enemigos y llama a Reaparecer() en cada uno.
+            foreach (EnemyController enemigo in todosLosEnemigos)
+            {
+                if (enemigo != null) // Asegura que el objeto no haya sido destruido
+                {
+                    enemigo.Reaparecer(); 
+                }
+            }
+            Debug.Log("Todos los enemigos han reaparecido en su punto de origen.");
         }
     }
     

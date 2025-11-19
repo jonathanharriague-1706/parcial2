@@ -1,6 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI; // Necesario para trabajar con la clase Image (la mira)
-using System.Collections; // Necesario para usar Coroutines (la recarga)
+using UnityEngine.UI; // Mantener solo para 'Image' (retícula)
+using System.Collections; 
 
 public class GunController : MonoBehaviour
 {
@@ -14,10 +14,10 @@ public class GunController : MonoBehaviour
 
     [Header("Feedback Visual")]
     [Tooltip("Referencia a la imagen de la reticula en el Canvas.")]
-    public Image reticulaImagen; // Variable para conectar la mira
+    public Image reticulaImagen; // Mira (Crosshair)
     
     // ===============================================
-    // NUEVAS VARIABLES DE MUNICIÓN Y RECARGA
+    // VARIABLES DE MUNICIÓN Y RECARGA
     // ===============================================
     [Header("Municion y Recarga")]
     [Tooltip("Máximo de balas por cargador.")]
@@ -32,6 +32,8 @@ public class GunController : MonoBehaviour
     private int balasActuales;
     private bool estaRecargando = false;
     
+    // **SE ELIMINA: playerMovement (ya no se usa la UI de vida)**
+
     void Start()
     {
         tpsCamera = Camera.main;
@@ -40,8 +42,12 @@ public class GunController : MonoBehaviour
             Debug.LogError("GunController: No se encontro la camara etiquetada como 'MainCamera'.");
         }
         
+        // **SE ELIMINA: La referencia a PlayerMovement ya que no se usa para la UI**
+
         // Inicializa el cargador lleno
         balasActuales = balasPorCargador;
+
+        // **SE ELIMINA: La actualización inicial de la UI**
     }
 
     void Update()
@@ -50,6 +56,8 @@ public class GunController : MonoBehaviour
         if (estaRecargando) return;
 
         ActualizarReticula(); // Llama a la logica de cambio de color
+        
+        // **SE ELIMINA: ActualizarTextoVida();**
         
         // 1. Lógica de Disparo (Click Izquierdo / Fire1)
         if (Input.GetButtonDown("Fire1") && Time.time >= siguienteTiempoDisparo)
@@ -76,8 +84,15 @@ public class GunController : MonoBehaviour
             }
             else
             {
+                // Bloquea la recarga si está lleno
                 Debug.Log("Cargador lleno. No necesita recargar.");
             }
+        }
+        
+        // Para debug, mostramos las balas en consola
+        if (Input.GetKeyDown(KeyCode.LeftShift)) 
+        {
+            Debug.Log($"ESTADO: Balas: {balasActuales}/{balasPorCargador}, Recargando: {estaRecargando}");
         }
     }
 
@@ -92,7 +107,7 @@ public class GunController : MonoBehaviour
         // Lanzamos un raycast desde el centro de la camara (la mira)
         if (Physics.Raycast(tpsCamera.transform.position, tpsCamera.transform.forward, out hit, rango))
         {
-            // Intentamos obtener el componente EnemyController del objeto golpeado
+            // Nota: Se asume que 'EnemyController' sigue existiendo para este script.
             if (hit.transform.GetComponent<EnemyController>() != null)
             {
                 // Apuntando a un enemigo: Color rojo
@@ -115,8 +130,10 @@ public class GunController : MonoBehaviour
     {
         // Consumir una bala del cargador
         balasActuales--; 
-        Debug.Log($"Balas restantes: {balasActuales}");
         
+        // **SE ELIMINA: ActualizarTextoBalas();**
+        Debug.Log($"Disparo! Balas restantes: {balasActuales}");
+
         RaycastHit hit;
         
         if (tpsCamera != null && Physics.Raycast(tpsCamera.transform.position, tpsCamera.transform.forward, out hit, rango))
@@ -128,7 +145,8 @@ public class GunController : MonoBehaviour
             
             if (targetEnemy != null)
             {
-                targetEnemy.RecibirDanio(danio);
+                // Nota: Asume que el EnemyController tiene el método RecibirDanio
+                targetEnemy.RecibirDanio(danio); 
             }
         }
     }
@@ -138,6 +156,9 @@ public class GunController : MonoBehaviour
     // ===============================================
     void Recargar()
     {
+        // Solo se recarga si no estamos recargando ya
+        if (estaRecargando) return; 
+
         // Iniciamos la coroutine de recarga
         StartCoroutine(RecargarConRetraso());
     }
@@ -148,12 +169,18 @@ public class GunController : MonoBehaviour
         estaRecargando = true;
         Debug.Log("Iniciando recarga...");
 
+        // **SE ELIMINA: La línea para mostrar "RECARGANDO..." en la UI**
+
         // Esperamos el tiempo de recarga
         yield return new WaitForSeconds(tiempoRecarga);
 
         // Recarga completa
-        balasActuales = balasPorCargador; // Cargadores ilimitados (siempre recarga a full)
+        balasActuales = balasPorCargador;
         estaRecargando = false;
+        
+        // **SE ELIMINA: ActualizarTextoBalas();**
         Debug.Log("Recarga completa. Balas actuales: " + balasActuales);
     }
+    
+    // **SE ELIMINAN: Los métodos ActualizarTextoBalas() y ActualizarTextoVida()**
 }
