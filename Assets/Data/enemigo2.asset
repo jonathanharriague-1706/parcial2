@@ -20,4 +20,4 @@ MonoBehaviour:
   distanciaAtaque: 1.5
   capasBloqueo:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 128

@@ -9,9 +9,9 @@ public class Soldier : ScriptableObject
     public float dañoPorContacto = 10f;
     
     [Header("Vision y Comportamiento")]
-    public float rangoVision = 10f; 
+    public float alcanceDeVision = 10f; 
     [Range(0, 360)]
-    public float anguloVision = 90f; 
+    public float mitadAnguloDeVision = 30f; 
     public float velocidadPersecucion = 3f;
     public float distanciaAtaque = 1.5f; 
     

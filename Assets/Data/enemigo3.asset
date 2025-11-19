@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c0d36c417ef026d40bba69359faf1f7d, type: 3}
-  m_Name: enemigo1
+  m_Name: enemigo3
   m_EditorClassIdentifier: 
   vidaMaxima: 100
   "da\xF1oPorContacto": 10
   rangoVision: 10
-  anguloVision: 60
-  velocidadPersecucion: 5
+  anguloVision: 90
+  velocidadPersecucion: 3
   distanciaAtaque: 1.5
   capasBloqueo:
     serializedVersion: 2

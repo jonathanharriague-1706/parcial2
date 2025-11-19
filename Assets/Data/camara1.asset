@@ -9,15 +9,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c0d36c417ef026d40bba69359faf1f7d, type: 3}
-  m_Name: enemigo1
+  m_Script: {fileID: 11500000, guid: e434a859ae9c6664ab0653f9440936b4, type: 3}
+  m_Name: camara1
   m_EditorClassIdentifier: 
   vidaMaxima: 100
-  "da\xF1oPorContacto": 10
-  rangoVision: 10
+  alcanceVision: 5
   anguloVision: 60
-  velocidadPersecucion: 5
-  distanciaAtaque: 1.5
   capasBloqueo:
     serializedVersion: 2
     m_Bits: 128
+  duracionDeteccion: 1

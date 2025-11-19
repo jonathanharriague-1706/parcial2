@@ -10,16 +10,9 @@ public class EnemyController : MonoBehaviour
     
     [Header("UI de Estado")]
     public TextMesh textoEstadoUI; 
+
+   
     
-    // ===========================================
-    // NUEVO: DETECCIÓN VECTORIAL (REQ. PROMPT)
-    // ===========================================
-    [Header("Detección de Visión (Vectorial)")]
-    [Tooltip("Alcance de Visión (metros). Requisito: 10mts.")]
-    public float alcanceDeVision = 10f; 
-    [Tooltip("Mitad del ángulo de apertura (Grados). Requisito: 30° (60° total).")]
-    [Range(0.0f, 90.0f)]
-    public float mitadAnguloDeVision = 30f; 
     
     // --- Variables de Control Interno ---
     private Vector3 posicionInicial; // ALMACENA la posición de inicio
@@ -146,8 +139,8 @@ public class EnemyController : MonoBehaviour
         // Si ya está persiguiendo, mantenemos la visión a un rango ampliado (usando el rango del SO).
         // Si no está persiguiendo, usamos el alcance de 10m requerido en el prompt.
         float rangoLimite = (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0) 
-            ? datosSoldado.rangoVision * 2f // Rango ampliado para persistencia
-            : alcanceDeVision; // 10 metros del requisito inicial
+            ? datosSoldado.alcanceDeVision * 2f // Rango ampliado para persistencia
+            :datosSoldado.alcanceDeVision; // 10 metros del requisito inicial
         
         if (distanciaAlJugador > rangoLimite) 
         {
@@ -160,7 +153,7 @@ public class EnemyController : MonoBehaviour
         // es igual al coseno del ángulo entre ellos.
         
         // a) Convertimos la mitad del ángulo a su Coseno.
-        float cosenoAnguloMaximo = Mathf.Cos(mitadAnguloDeVision * Mathf.Deg2Rad); 
+        float cosenoAnguloMaximo = Mathf.Cos(datosSoldado.mitadAnguloDeVision * Mathf.Deg2Rad); 
         
         // b) Calculamos el Producto Punto.
         float productoPunto = Vector3.Dot(transform.forward, direccionAlJugador);
@@ -286,11 +279,11 @@ public class EnemyController : MonoBehaviour
     {
         // 1. Dibuja el círculo de alcance (radio de 10 mts) en el suelo (Color Amarillo).
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, alcanceDeVision);
+        Gizmos.DrawWireSphere(transform.position, datosSoldado.alcanceDeVision);
 
         // 2. Dibuja el cono de visión.
         Vector3 puntoInicial = transform.position;
-        Vector3 direccionFrente = transform.forward * alcanceDeVision;
+        Vector3 direccionFrente = transform.forward * datosSoldado.alcanceDeVision;
 
         // Dibuja la línea central
         Gizmos.color = Color.white;
@@ -300,12 +293,12 @@ public class EnemyController : MonoBehaviour
         // La rotación se aplica sobre el eje Y (Vector3.up)
         
         // Rotación de -30 grados (izquierda):
-        Quaternion rotacionIzquierda = Quaternion.AngleAxis(-mitadAnguloDeVision, Vector3.up);
+        Quaternion rotacionIzquierda = Quaternion.AngleAxis(-datosSoldado.mitadAnguloDeVision, Vector3.up);
         Vector3 direccionIzquierda = rotacionIzquierda * direccionFrente;
         Gizmos.DrawLine(puntoInicial, puntoInicial + direccionIzquierda);
 
         // Rotación de +30 grados (derecha):
-        Quaternion rotacionDerecha = Quaternion.AngleAxis(mitadAnguloDeVision, Vector3.up);
+        Quaternion rotacionDerecha = Quaternion.AngleAxis(datosSoldado.mitadAnguloDeVision, Vector3.up);
         Vector3 direccionDerecha = rotacionDerecha * direccionFrente;
         Gizmos.DrawLine(puntoInicial, puntoInicial + direccionDerecha);
 
