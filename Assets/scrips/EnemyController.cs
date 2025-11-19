@@ -23,7 +23,7 @@ public class EnemyController : MonoBehaviour
     private Vector3 velocidadVertical;
     private float vidaActual;
     
-    // Control del color de daño (temporal, SOLO visual, NO detiene el movimiento)
+    // Control del color de daño (SOLO visual, NO detiene el movimiento)
     private float tiempoDañoVisual = 0f; 
     public float duracionDañoVisual = 0.2f; 
 
@@ -55,55 +55,66 @@ public class EnemyController : MonoBehaviour
     {
         if (jugador == null || estadoActual == EnemyState.Dead) return;
         
-        // 1. Manejo del tiempo visual de daño
+        // 1. Lógica para Reiniciar el Enemigo (F3)
+        if (Input.GetKeyDown(KeyCode.F3))
+        {
+            Reaparecer();
+            return;
+        }
+
+        // 2. Manejo del tiempo visual de daño
         bool enDañoVisual = tiempoDañoVisual > 0;
         if (enDañoVisual)
         {
             tiempoDañoVisual -= Time.deltaTime;
         }
 
-        // 2. Aplicar Gravedad
+        // 3. Aplicar Gravedad
         if (controlador.isGrounded) velocidadVertical.y = -0.5f; 
         else velocidadVertical.y += gravedad * Time.deltaTime;
         controlador.Move(velocidadVertical * Time.deltaTime);
         
-        // 3. LÓGICA DE DETECCIÓN Y TRANSICIÓN 
+        // 4. LÓGICA DE DETECCIÓN Y TRANSICIÓN 
         
         bool jugadorTieneVisionClara = JugadorEnConoDeVisionClara(); 
         
-        // Si el enemigo está en CHASE O si acaba de salir de un daño visual (y la visión es clara)
+        // El enemigo actúa si hay visión O si ya estaba persiguiendo O si está en daño visual (persistencia).
         if (jugadorTieneVisionClara || estadoActual == EnemyState.Chase || enDañoVisual)
         {
             // Lógica de Detención CRÍTICA:
-            // Si el enemigo está persiguiendo Y la visión CLARA se pierde Y el efecto visual terminó.
-            if (estadoActual == EnemyState.Chase && !jugadorTieneVisionClara && !enDañoVisual)
+            // **SOLO** vuelve a Normal si: 
+            // 1. Estaba persiguiendo O en daño.
+            // 2. La visión CLARA se pierde (obstrucción).
+            // 3. El efecto visual de daño terminó.
+            if ((estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage) && !jugadorTieneVisionClara && !enDañoVisual)
             {
                 ActualizarEstado(EnemyState.Normal);
-                return; // Detiene la persecución.
+                return; // Detiene la persecución y el movimiento.
             }
 
-            // Lógica de Persecución:
-            // Si la persecución debe continuar (visión clara o estaba en Chase/Damage)
+            // Lógica de Persecución y Actualización de Estado:
             
-            // Si el efecto visual terminó, volvemos a CHASE. Si no ha terminado, se queda en DAMAGE.
+            PerseguirJugador();
+
+            // Actualizamos el estado para la UI: el estado visual de daño tiene prioridad.
             if (!enDañoVisual)
             {
+                // Si no hay daño visual, forzamos el estado a CHASE.
                 ActualizarEstado(EnemyState.Chase);
             }
             // Si enDañoVisual es true, el estado se mantiene en DAMAGE para el color amarillo.
-            
-            PerseguirJugador();
             
             // Lógica de Daño al Jugador (Ataque)
             // ...
         }
         else if (estadoActual != EnemyState.Normal)
         {
-            // Transición a Normal si no hay visión y no está persiguiendo (detección inicial).
+            // Transición a Normal si no hay visión, no está en Chase, y no está en daño visual.
+            // Esto solo pasa si el enemigo nunca detectó al jugador o después de una reaparición.
             ActualizarEstado(EnemyState.Normal);
         }
         
-        // 4. LÓGICA DE LA UI DE ESTADO (Billboard)
+        // 5. LÓGICA DE LA UI DE ESTADO (Billboard)
         if (textoEstadoUI != null)
         {
             textoEstadoUI.transform.LookAt(Camera.main.transform);
@@ -112,7 +123,7 @@ public class EnemyController : MonoBehaviour
     }
     
     // ===========================================
-    // FUNCIÓN CRÍTICA: VISIÓN CLARA
+    // FUNCIÓN CRÍTICA: VISIÓN CLARA (Ahora ignora el rango si está en CHASE/DAMAGE)
     // ===========================================
     bool JugadorEnConoDeVisionClara()
     {
@@ -122,27 +133,31 @@ public class EnemyController : MonoBehaviour
         Vector3 direccionAlJugador = (posicionJugadorCentrada - posicionOjosEnemigo).normalized;
         float distanciaAlJugador = Vector3.Distance(posicionOjosEnemigo, posicionJugadorCentrada);
 
-        // Si estamos persiguiendo, usamos un rango grande (100f) para chequear obstrucción.
-        float rangoDeChequeo = (estadoActual == EnemyState.Chase || tiempoDañoVisual > 0) ? 100f : datosSoldado.rangoVision;
+        // **CRÍTICO:** Rango Ilimitado (1000f) si ya está persiguiendo o en daño visual.
+        // Si está en Normal, usa el rango de visión configurado.
+        float rangoDeChequeo = (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0) 
+            ? 1000f // Rango prácticamente infinito para persecución.
+            : datosSoldado.rangoVision; // Rango limitado para detección inicial.
         
         if (distanciaAlJugador > rangoDeChequeo) return false; 
 
         float angulo = Vector3.Angle(transform.forward, direccionAlJugador);
         
-        // El ángulo solo importa si NO estamos persiguiendo.
-        if (estadoActual == EnemyState.Chase || tiempoDañoVisual > 0 || angulo < datosSoldado.anguloVision / 2f)
+        // **CRÍTICO:** El ángulo solo importa si está en estado Normal.
+        if (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0 || angulo < datosSoldado.anguloVision / 2f)
         {
             RaycastHit hit;
             
             // Raycast SÓLO busca la capa de Bloqueo ('detectable')
             if (Physics.Raycast(posicionOjosEnemigo, direccionAlJugador, out hit, distanciaAlJugador, datosSoldado.capasBloqueo))
             {
+                // La visión se pierde ÚNICAMENTE por una obstrucción.
                 Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * hit.distance, Color.red, 0.1f);
                 return false; 
             }
             
             Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * distanciaAlJugador, Color.green, 0.1f);
-            return true; 
+            return true; // Vista CLARA.
         }
         
         return false; 
@@ -177,13 +192,11 @@ public class EnemyController : MonoBehaviour
         vidaActual -= cantidad;
         vidaActual = Mathf.Max(vidaActual, 0f); 
         
-        // CRÍTICO: Solo se usa la variable para el feedback visual/estado, no para detener el movimiento.
         tiempoDañoVisual = duracionDañoVisual; 
         ActualizarEstado(EnemyState.Damage); 
         
         if (vidaActual <= 0) Morir();
     }
-    // ... (El resto de las funciones Morir, Reaparecer y ActualizarEstado siguen igual) ...
 
     void Morir()
     {
@@ -197,10 +210,12 @@ public class EnemyController : MonoBehaviour
         if (!gameObject.activeSelf)
         {
             gameObject.SetActive(true); 
-            transform.position = posicionInicial; 
-            vidaActual = datosSoldado.vidaMaxima; 
-            ActualizarEstado(EnemyState.Normal, true); 
         }
+        transform.position = posicionInicial; 
+        vidaActual = datosSoldado.vidaMaxima; 
+        ActualizarEstado(EnemyState.Normal, true); 
+        velocidadVertical = Vector3.zero; 
+        Debug.Log("Enemigo Reiniciado a la Posición Inicial.");
     }
     
     void ActualizarEstado(EnemyState nuevoEstado, bool force = false)

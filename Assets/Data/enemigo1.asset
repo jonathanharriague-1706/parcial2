@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   vidaMaxima: 100
   "da\xF1oPorContacto": 10
-  rangoVision: 10
+  rangoVision: 15
   anguloVision: 180
   velocidadPersecucion: 6
   distanciaAtaque: 1.5
