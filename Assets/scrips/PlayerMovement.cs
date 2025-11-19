@@ -30,8 +30,12 @@ public class PlayerMovement : MonoBehaviour
     public float vidaMaxima = 100f; 
     
     [Tooltip("El componente Text de Unity para mostrar la vida actual.")]
-    public Text textoVida; // <-- ¡NUEVA VARIABLE PARA EL TEXTO DE VIDA!
+    public Text textoVida; 
     
+    // [NUEVO] Color base para la vida (puedes poner violeta aquí en el Inspector)
+    [Tooltip("Color base del texto de vida cuando está por encima del 50%.")]
+    public Color colorBaseVida = Color.white; // Configúralo como violeta en Unity
+
     // --- Variables de Control Interno ---
     private bool estaAgachado = false; 
     private CharacterController controlador;
@@ -158,7 +162,10 @@ public class PlayerMovement : MonoBehaviour
             // Muestra la vida actual redondeada al entero más cercano, seguida de la vida máxima.
             textoVida.text = $"VIDA: {Mathf.CeilToInt(vidaActual)}/{vidaMaxima}";
             
-            // Opcional: Cambiar color para feedback visual
+            // [MODIFICADO] Aplica el color base PRIMERO.
+            textoVida.color = colorBaseVida; 
+            
+            // Lógica de color condicional: SOLO aplica los colores de peligro
             if (vidaActual <= 25)
             {
                 textoVida.color = Color.red;
@@ -167,10 +174,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 textoVida.color = Color.yellow;
             }
-            else
-            {
-                textoVida.color = Color.white;
-            }
+            // [ELIMINADO] el 'else' que lo forzaba a Color.white
         }
     }
 }

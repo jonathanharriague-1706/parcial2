@@ -11,6 +11,16 @@ public class EnemyController : MonoBehaviour
     [Header("UI de Estado")]
     public TextMesh textoEstadoUI; 
     
+    // ===========================================
+    // NUEVO: DETECCIÓN VECTORIAL (REQ. PROMPT)
+    // ===========================================
+    [Header("Detección de Visión (Vectorial)")]
+    [Tooltip("Alcance de Visión (metros). Requisito: 10mts.")]
+    public float alcanceDeVision = 10f; 
+    [Tooltip("Mitad del ángulo de apertura (Grados). Requisito: 30° (60° total).")]
+    [Range(0.0f, 90.0f)]
+    public float mitadAnguloDeVision = 30f; 
+    
     // --- Variables de Control Interno ---
     private Vector3 posicionInicial; // ALMACENA la posición de inicio
     private PlayerMovement jugador; 
@@ -26,6 +36,9 @@ public class EnemyController : MonoBehaviour
     // Control del color de daño (SOLO visual, NO detiene el movimiento)
     private float tiempoDañoVisual = 0f; 
     public float duracionDañoVisual = 0.2f; 
+    
+    // Estado para los Gizmos (se actualiza en la función de visión)
+    private bool jugadorDetectado = false; 
 
     public enum EnemyState { Normal, Chase, Damage, Dead }
 
@@ -77,16 +90,13 @@ public class EnemyController : MonoBehaviour
         
         // 4. LÓGICA DE DETECCIÓN Y TRANSICIÓN 
         
+        // ** Llamada CRÍTICA: La función de visión ahora también actualiza 'jugadorDetectado' para los Gizmos **
         bool jugadorTieneVisionClara = JugadorEnConoDeVisionClara(); 
         
         // El enemigo actúa si hay visión O si ya estaba persiguiendo O si está en daño visual (persistencia).
         if (jugadorTieneVisionClara || estadoActual == EnemyState.Chase || enDañoVisual)
         {
             // Lógica de Detención CRÍTICA:
-            // **SOLO** vuelve a Normal si: 
-            // 1. Estaba persiguiendo O en daño.
-            // 2. La visión CLARA se pierde (obstrucción).
-            // 3. El efecto visual de daño terminó.
             if ((estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage) && !jugadorTieneVisionClara && !enDañoVisual)
             {
                 ActualizarEstado(EnemyState.Normal);
@@ -103,10 +113,6 @@ public class EnemyController : MonoBehaviour
                 // Si no hay daño visual, forzamos el estado a CHASE.
                 ActualizarEstado(EnemyState.Chase);
             }
-            // Si enDañoVisual es true, el estado se mantiene en DAMAGE para el color amarillo.
-            
-            // Lógica de Daño al Jugador (Ataque)
-            // ...
         }
         else if (estadoActual != EnemyState.Normal)
         {
@@ -123,8 +129,11 @@ public class EnemyController : MonoBehaviour
     }
     
     // ===========================================
-    // FUNCIÓN CRÍTICA: VISIÓN CLARA
+    // FUNCIÓN CRÍTICA: VISIÓN CLARA (USANDO PRODUCTO PUNTO)
     // ===========================================
+    /// <summary>
+    /// Comprueba si el jugador está visible, usando Producto Punto para el ángulo.
+    /// </summary>
     bool JugadorEnConoDeVisionClara()
     {
         Vector3 posicionOjosEnemigo = transform.position + Vector3.up * 1.8f; 
@@ -133,31 +142,51 @@ public class EnemyController : MonoBehaviour
         Vector3 direccionAlJugador = (posicionJugadorCentrada - posicionOjosEnemigo).normalized;
         float distanciaAlJugador = Vector3.Distance(posicionOjosEnemigo, posicionJugadorCentrada);
 
-        // Rango Ilimitado (1000f) si ya está persiguiendo o en daño visual.
-        float rangoDeChequeo = (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0) 
-            ? 1000f 
-            : datosSoldado.rangoVision; 
+        // 1. RANGO DE VISIÓN
+        // Si ya está persiguiendo, mantenemos la visión a un rango ampliado (usando el rango del SO).
+        // Si no está persiguiendo, usamos el alcance de 10m requerido en el prompt.
+        float rangoLimite = (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0) 
+            ? datosSoldado.rangoVision * 2f // Rango ampliado para persistencia
+            : alcanceDeVision; // 10 metros del requisito inicial
         
-        if (distanciaAlJugador > rangoDeChequeo) return false; 
-
-        float angulo = Vector3.Angle(transform.forward, direccionAlJugador);
-        
-        // El ángulo solo importa si está en estado Normal.
-        if (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0 || angulo < datosSoldado.anguloVision / 2f)
+        if (distanciaAlJugador > rangoLimite) 
         {
+            jugadorDetectado = false; // Actualizar estado para Gizmos
+            return false; 
+        }
+
+        // 2. DETECCIÓN ANGULAR (PRODUCTO PUNTO) - ¡REQUISITO CLAVE!
+        // El Producto Punto entre dos vectores unitarios (como transform.forward y direccionAlJugador) 
+        // es igual al coseno del ángulo entre ellos.
+        
+        // a) Convertimos la mitad del ángulo a su Coseno.
+        float cosenoAnguloMaximo = Mathf.Cos(mitadAnguloDeVision * Mathf.Deg2Rad); 
+        
+        // b) Calculamos el Producto Punto.
+        float productoPunto = Vector3.Dot(transform.forward, direccionAlJugador);
+        
+        // c) Si el Producto Punto es mayor o igual al coseno máximo, el jugador está dentro del cono.
+        if (productoPunto >= cosenoAnguloMaximo) 
+        {
+            // 3. RAYCAST (Comprobación de Oclusión/Obstrucción)
             RaycastHit hit;
             
-            // Raycast SÓLO busca la capa de Bloqueo ('detectable')
+            // Raycast SÓLO busca la capa de Bloqueo ('detectable') definida en el Scriptable Object
             if (Physics.Raycast(posicionOjosEnemigo, direccionAlJugador, out hit, distanciaAlJugador, datosSoldado.capasBloqueo))
             {
                 Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * hit.distance, Color.red, 0.1f);
+                jugadorDetectado = false; // Obstrucción
                 return false; 
             }
             
+            // Si pasamos el ángulo y el raycast: JUGADOR DETECTADO
             Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * distanciaAlJugador, Color.green, 0.1f);
-            return true; // Vista CLARA.
+            jugadorDetectado = true; // Detectado
+            return true; 
         }
         
+        // No pasó el ángulo
+        jugadorDetectado = false; 
         return false; 
     }
     
@@ -250,8 +279,42 @@ public class EnemyController : MonoBehaviour
         }
     }
     
+    // ===========================================
+    // GIZMOS (Visualización en el Editor) - ¡REQUISITO CUMPLIDO!
+    // ===========================================
     private void OnDrawGizmosSelected()
     {
-        // Lógica para dibujar el cono de visión
+        // 1. Dibuja el círculo de alcance (radio de 10 mts) en el suelo (Color Amarillo).
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, alcanceDeVision);
+
+        // 2. Dibuja el cono de visión.
+        Vector3 puntoInicial = transform.position;
+        Vector3 direccionFrente = transform.forward * alcanceDeVision;
+
+        // Dibuja la línea central
+        Gizmos.color = Color.white;
+        Gizmos.DrawLine(puntoInicial, puntoInicial + direccionFrente);
+
+        // Dibuja las líneas de apertura (30 grados a cada lado).
+        // La rotación se aplica sobre el eje Y (Vector3.up)
+        
+        // Rotación de -30 grados (izquierda):
+        Quaternion rotacionIzquierda = Quaternion.AngleAxis(-mitadAnguloDeVision, Vector3.up);
+        Vector3 direccionIzquierda = rotacionIzquierda * direccionFrente;
+        Gizmos.DrawLine(puntoInicial, puntoInicial + direccionIzquierda);
+
+        // Rotación de +30 grados (derecha):
+        Quaternion rotacionDerecha = Quaternion.AngleAxis(mitadAnguloDeVision, Vector3.up);
+        Vector3 direccionDerecha = rotacionDerecha * direccionFrente;
+        Gizmos.DrawLine(puntoInicial, puntoInicial + direccionDerecha);
+
+        // 3. Si el jugador está detectado, dibuja una línea roja de detección.
+        if (jugadorDetectado && jugador != null)
+        {
+            Gizmos.color = Color.red;
+            // Dibujamos la línea a la altura aproximada del centro del cuerpo del jugador
+            Gizmos.DrawLine(transform.position + Vector3.up * 1.0f, jugador.transform.position + Vector3.up * 1.0f);
+        }
     }
 }
