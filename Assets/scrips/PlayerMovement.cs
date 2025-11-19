@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI; // ¡IMPORTANTE! Necesario para usar el componente Text
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -22,11 +23,14 @@ public class PlayerMovement : MonoBehaviour
     public float alturaAgachado = 1.0f;      // 50% de reduccion (si alturaBase es 2.0f)
 
     // ===============================================
-    // Variables de Vida (Mantenemos por la logica de DANO y MUERTE)
+    // Variables de Vida y UI
     // ===============================================
-    [Header("Configuracion de Vida")]
+    [Header("Configuracion de Vida y UI")]
     public float vidaActual = 100f; 
     public float vidaMaxima = 100f; 
+    
+    [Tooltip("El componente Text de Unity para mostrar la vida actual.")]
+    public Text textoVida; // <-- ¡NUEVA VARIABLE PARA EL TEXTO DE VIDA!
     
     // --- Variables de Control Interno ---
     private bool estaAgachado = false; 
@@ -57,7 +61,9 @@ public class PlayerMovement : MonoBehaviour
         vidaActual = vidaMaxima;
         velocidadActual = velocidadBase; 
         controlador.height = alturaBase;
-        // NOTA: El agachado está sin corregir aquí.
+        
+        // ¡LLAMADA INICIAL A LA UI! Muestra la vida al empezar el juego.
+        ActualizarTextoVida(); 
     }
 
     void Update()
@@ -133,5 +139,38 @@ public class PlayerMovement : MonoBehaviour
     {
         vidaActual -= cantidad;
         Debug.Log($"Vida restante: {vidaActual}");
+        
+        // ¡LLAMADA A LA UI! Actualiza el texto cada vez que recibes daño.
+        ActualizarTextoVida(); 
+    }
+    
+    // ===============================================
+    // MÉTODOS DE UI (Vida)
+    // ===============================================
+
+    /// <summary>
+    /// Actualiza el componente de texto de la UI con la vida del jugador.
+    /// </summary>
+    void ActualizarTextoVida()
+    {
+        if (textoVida != null)
+        {
+            // Muestra la vida actual redondeada al entero más cercano, seguida de la vida máxima.
+            textoVida.text = $"VIDA: {Mathf.CeilToInt(vidaActual)}/{vidaMaxima}";
+            
+            // Opcional: Cambiar color para feedback visual
+            if (vidaActual <= 25)
+            {
+                textoVida.color = Color.red;
+            }
+            else if (vidaActual <= 50)
+            {
+                textoVida.color = Color.yellow;
+            }
+            else
+            {
+                textoVida.color = Color.white;
+            }
+        }
     }
 }
