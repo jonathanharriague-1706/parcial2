@@ -14,10 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   vidaMaxima: 100
   "da\xF1oPorContacto": 10
-  rangoVision: 10
-  anguloVision: 90
-  velocidadPersecucion: 3
+  alcanceDeVision: 2
+  mitadAnguloDeVision: 30
+  velocidadPersecucion: 5
   distanciaAtaque: 1.5
+  tiempoEntreAtaques: 1.5
   capasBloqueo:
     serializedVersion: 2
     m_Bits: 128

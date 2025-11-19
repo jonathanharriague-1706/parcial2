@@ -15,6 +15,10 @@ public class SurveillanceCameraController : MonoBehaviour
     private CameraState estadoActual = CameraState.Normal;
     private float tiempoPerdidaVision = 0f;
 
+    // CRÍTICO PARA REAPARICIÓN (F3)
+    private Vector3 posicionInicial;
+    private Quaternion rotacionInicial;
+
     // Estado para la visualización de Gizmos
     private bool jugadorEnFOV = false; 
 
@@ -28,6 +32,10 @@ public class SurveillanceCameraController : MonoBehaviour
             enabled = false; 
             return;
         }
+
+        // GUARDAR ESTADO INICIAL
+        posicionInicial = transform.position; 
+        rotacionInicial = transform.rotation;
 
         vidaActual = datosCamara.vidaMaxima;
         
@@ -47,23 +55,20 @@ public class SurveillanceCameraController : MonoBehaviour
 
         if (visionClara)
         {
-            // Si hay visión clara, inmediatamente pasa a Detectado.
             ActualizarEstado(CameraState.Detectado);
-            tiempoPerdidaVision = datosCamara.duracionDeteccion; // Reinicia el temporizador de persistencia
+            tiempoPerdidaVision = datosCamara.duracionDeteccion; 
+            
+            // [OPCIONAL] Alerta a enemigos cercanos o llama a otra función de reacción aquí
         }
         else if (estadoActual == CameraState.Detectado)
         {
-            // Si no hay visión clara, pero estaba Detectado, inicia el temporizador.
             tiempoPerdidaVision -= Time.deltaTime;
             
             if (tiempoPerdidaVision <= 0)
             {
-                // Vuelve a Normal después de un pequeño tiempo de persistencia.
                 ActualizarEstado(CameraState.Normal);
             }
         }
-        
-        // La cámara no tiene lógica de movimiento, solo detección.
     }
     
     // ===========================================
@@ -76,11 +81,8 @@ public class SurveillanceCameraController : MonoBehaviour
     {
         // Vector de la posición del jugador centrado (asumimos altura similar)
         Vector3 posicionJugadorCentrada = jugador.transform.position + Vector3.up * 0.9f; 
-        
-        // La cámara de vigilancia no tiene "ojos" específicos, usamos su centro.
         Vector3 puntoInicial = transform.position; 
 
-        // Vector y distancia al jugador
         Vector3 direccionAlJugador = (posicionJugadorCentrada - puntoInicial).normalized;
         float distanciaAlJugador = Vector3.Distance(puntoInicial, posicionJugadorCentrada);
 
@@ -93,35 +95,26 @@ public class SurveillanceCameraController : MonoBehaviour
 
         // 2. DETECCIÓN ANGULAR (PRODUCTO PUNTO)
         float mitadAngulo = datosCamara.anguloVision / 2f;
-        
-        // Convertimos la mitad del ángulo a su Coseno.
         float cosenoAnguloMaximo = Mathf.Cos(mitadAngulo * Mathf.Deg2Rad); 
-        
-        // Calculamos el Producto Punto entre la dirección de la cámara y la dirección al jugador.
         float productoPunto = Vector3.Dot(transform.forward, direccionAlJugador);
         
-        // Si el Producto Punto es mayor o igual al coseno máximo, el jugador está dentro del cono.
         if (productoPunto >= cosenoAnguloMaximo) 
         {
             // 3. RAYCAST (Comprobación de Oclusión/Obstrucción)
             RaycastHit hit;
             
-            // Verificamos si hay algún obstáculo en el camino.
             if (Physics.Raycast(puntoInicial, direccionAlJugador, out hit, distanciaAlJugador, datosCamara.capasBloqueo))
             {
-                // Obstrucción: dibujamos en rojo
                 Debug.DrawRay(puntoInicial, direccionAlJugador * hit.distance, Color.red, 0.1f);
                 jugadorEnFOV = false; 
                 return false; 
             }
             
-            // Vista CLARA: dibujamos en verde
             Debug.DrawRay(puntoInicial, direccionAlJugador * distanciaAlJugador, Color.green, 0.1f);
             jugadorEnFOV = true; 
             return true; 
         }
         
-        // No pasó la prueba de ángulo
         jugadorEnFOV = false; 
         return false; 
     }
@@ -140,23 +133,57 @@ public class SurveillanceCameraController : MonoBehaviour
         vidaActual -= cantidad;
         vidaActual = Mathf.Max(vidaActual, 0f); 
         
+        Debug.Log($"CÁMARA: Daño recibido: {cantidad}. Vida restante: {vidaActual}");
+        
         if (vidaActual <= 0) 
         {
             Morir();
         } 
-        else 
-        {
-            // Notificar que está recibiendo daño si es necesario (ej. para un efecto visual)
-        }
     }
 
     void Morir()
     {
         ActualizarEstado(CameraState.Destruido);
-        Debug.Log($"Cámara Destruida. Vida restante: {vidaActual}");
-        // Aquí podrías agregar efectos de explosión, sonido o deshabilitar visualmente el GameObject.
-        // Por ahora solo deshabilitamos la detección y mostramos un log.
-        // gameObject.SetActive(false); 
+        Debug.Log($"CÁMARA: Objeto Destruido. Vida final: {vidaActual}");
+        
+        // CRÍTICO: Desactiva los componentes que podrían ser necesarios para la detección/colisión.
+        if (GetComponent<Collider>() != null)
+        {
+            GetComponent<Collider>().enabled = false;
+        }
+        if (GetComponent<Renderer>() != null)
+        {
+            GetComponent<Renderer>().enabled = false;
+        }
+        enabled = false; // Desactiva este script
+    }
+
+    /// <summary>
+    /// Restaura la vida, el estado y la posición de la cámara (Usado por F3 en PlayerMovement).
+    /// </summary>
+    public void Reaparecer()
+    {
+        // 1. Resetear el estado
+        vidaActual = datosCamara.vidaMaxima;
+        tiempoPerdidaVision = 0f;
+
+        // 2. Reactivar componentes
+        if (GetComponent<Collider>() != null)
+        {
+             GetComponent<Collider>().enabled = true;
+        }
+        if (GetComponent<Renderer>() != null)
+        {
+             GetComponent<Renderer>().enabled = true;
+        }
+        enabled = true; // Reactiva este script
+        
+        // 3. Resetear posición y rotación a su estado inicial
+        transform.position = posicionInicial;
+        transform.rotation = rotacionInicial;
+
+        ActualizarEstado(CameraState.Normal);
+        Debug.Log("CÁMARA: Reaparecida y restaurada a estado Normal.");
     }
     
     void ActualizarEstado(CameraState nuevoEstado)
@@ -165,17 +192,18 @@ public class SurveillanceCameraController : MonoBehaviour
         {
             estadoActual = nuevoEstado;
             
-            // Puedes agregar lógica de feedback visual aquí (ej. cambiar el color de una luz).
             switch (estadoActual)
             {
                 case CameraState.Normal:
+                    // Lógica para estado normal (ej. luz verde)
                     Debug.Log("Cámara en estado NORMAL.");
                     break;
                 case CameraState.Detectado:
+                    // Lógica para detección (ej. luz roja)
                     Debug.Log("Cámara ha DETECTADO al jugador.");
-                    // Aquí se puede activar una alarma, Spawn de enemigos, etc.
                     break;
                 case CameraState.Destruido:
+                    // Lógica para destrucción (ej. desactivar luz)
                     Debug.Log("Cámara DESTRUIDA.");
                     break;
             }
@@ -183,7 +211,7 @@ public class SurveillanceCameraController : MonoBehaviour
     }
     
     // ===========================================
-    // GIZMOS (Visualización del cono de visión) - ¡REQUISITO CUMPLIDO!
+    // GIZMOS (Visualización del cono de visión)
     // ===========================================
     private void OnDrawGizmos()
     {
@@ -193,7 +221,6 @@ public class SurveillanceCameraController : MonoBehaviour
         float mitadAngulo = datosCamara.anguloVision / 2f;
         Vector3 puntoInicial = transform.position;
         
-        // Color para el cono: Rojo si detecta, Amarillo si está activo, Gris si está destruida
         if (estadoActual == CameraState.Destruido)
         {
             Gizmos.color = Color.gray;
@@ -207,29 +234,18 @@ public class SurveillanceCameraController : MonoBehaviour
             Gizmos.color = Color.yellow;
         }
 
-        // 1. Dibuja el círculo de alcance
         Gizmos.DrawWireSphere(puntoInicial, alcance);
-
-        // 2. Dibuja el cono de visión.
         Vector3 direccionFrente = transform.forward * alcance;
-
-        // Dibuja la línea central
         Gizmos.DrawLine(puntoInicial, puntoInicial + direccionFrente);
 
-        // Dibuja las líneas de apertura
-        
-        // Rotación de ángulo negativo (izquierda):
         Quaternion rotacionIzquierda = Quaternion.AngleAxis(-mitadAngulo, Vector3.up);
         Vector3 direccionIzquierda = rotacionIzquierda * direccionFrente;
         Gizmos.DrawLine(puntoInicial, puntoInicial + direccionIzquierda);
 
-        // Rotación de ángulo positivo (derecha):
         Quaternion rotacionDerecha = Quaternion.AngleAxis(mitadAngulo, Vector3.up);
         Vector3 direccionDerecha = rotacionDerecha * direccionFrente;
         Gizmos.DrawLine(puntoInicial, puntoInicial + direccionDerecha);
 
-        // 3. Dibuja la tapa del cono (un arco para mejor visualización)
-        // Dibuja un arco de línea entre los límites del FOV
         int segmentos = 16;
         Vector3 puntoAnterior = puntoInicial + direccionIzquierda;
         

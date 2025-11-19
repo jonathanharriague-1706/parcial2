@@ -100,8 +100,11 @@ public class GunController : MonoBehaviour
         // Lanzamos un raycast desde el centro de la camara (la mira)
         if (Physics.Raycast(tpsCamera.transform.position, tpsCamera.transform.forward, out hit, rango))
         {
-            // Apuntando a un enemigo: Color rojo
-            if (hit.transform.GetComponent<EnemyController>() != null)
+            // Verificamos si golpea un enemigo tradicional O a la nueva camara de vigilancia
+            bool esTarget = hit.transform.GetComponent<EnemyController>() != null ||
+                            hit.transform.GetComponent<SurveillanceCameraController>() != null; // <--- ¡CAMBIO CLAVE AÑADIDO!
+            
+            if (esTarget)
             {
                 reticulaImagen.color = Color.red; 
             }
@@ -130,13 +133,25 @@ public class GunController : MonoBehaviour
         
         if (tpsCamera != null && Physics.Raycast(tpsCamera.transform.position, tpsCamera.transform.forward, out hit, rango))
         {
-            // Busca el EnemyController para aplicar el dano
+            // 1. Busca el EnemyController para aplicar el dano (Enemigo tradicional)
             EnemyController targetEnemy = hit.transform.GetComponent<EnemyController>();
             
             if (targetEnemy != null)
             {
                 targetEnemy.RecibirDanio(danio); 
+                return; // Importante: Salir si ya golpeamos algo que puede recibir daño
             }
+
+            // 2. Busca el SurveillanceCameraController (La nueva cámara como enemigo)
+            SurveillanceCameraController targetCamera = hit.transform.GetComponent<SurveillanceCameraController>(); // <--- ¡CAMBIO CLAVE AÑADIDO!
+            
+            if (targetCamera != null)
+            {
+                targetCamera.RecibirDanio(danio); 
+                return; // Importante: Salir si ya golpeamos algo que puede recibir daño
+            }
+            
+            // Si quieres agregar efectos de impacto en objetos que no son enemigos, van aquí.
         }
     }
     

@@ -1,5 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI; // ¡IMPORTANTE! Necesario para usar el componente Text
+using UnityEngine.UI; 
+using UnityEngine.SceneManagement; 
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -7,20 +8,22 @@ public class PlayerMovement : MonoBehaviour
     // REQUERIDO: REFERENCIAS DE JUEGO
     // ===============================================
     [Header("Referencias de Juego")]
-    // [MODIFICADO] Ahora es un ARRAY para almacenar a TODOS los enemigos de la escena.
     private EnemyController[] todosLosEnemigos; 
+    
+    // [CORREGIDO] Array para almacenar referencias al tipo de script correcto.
+    private SurveillanceCameraController[] todosLosCameras; 
 
     // ===============================================
-    // Configuración de MOVIMIENTO y SIGILO (Requisitos Parcial 2)
+    // Configuración de MOVIMIENTO y SIGILO
     // ===============================================
     [Header("Configuracion de Movimiento y Sigilo")]
-    public float velocidadBase = 5f;        
-    private float velocidadActual;          
+    public float velocidadBase = 5f;        
+    private float velocidadActual;          
     
     // REQUISITOS DE SIGILO
-    public float multiplicadorSigilo = 0.75f; // Reduce la velocidad un 25%
-    public float alturaBase = 2.0f;          // Altura normal del CharacterController
-    public float alturaAgachado = 1.0f;      // 50% de reduccion (si alturaBase es 2.0f)
+    public float multiplicadorSigilo = 0.75f; 
+    public float alturaBase = 2.0f;          
+    public float alturaAgachado = 1.0f;      
 
     // ===============================================
     // Variables de Vida y UI
@@ -32,11 +35,17 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("El componente Text de Unity para mostrar la vida actual.")]
     public Text textoVida; 
     
-    // [NUEVO] Color base para la vida (puedes poner violeta aquí en el Inspector)
     [Tooltip("Color base del texto de vida cuando está por encima del 50%.")]
-    public Color colorBaseVida = Color.white; // Configúralo como violeta en Unity
+    public Color colorBaseVida = Color.white; 
+
+    // ===============================================
+    // CRÍTICO: ESTADO DE MUERTE (Accedido por el enemigo)
+    // ===============================================
+    [HideInInspector] 
+    public bool estaMuerto = false; 
 
     // --- Variables de Control Interno ---
+    private Vector3 posicionInicialPlayer; 
     private bool estaAgachado = false; 
     private CharacterController controlador;
     private Vector3 velocidadVertical;
@@ -49,29 +58,48 @@ public class PlayerMovement : MonoBehaviour
             Debug.LogError("PlayerMovement requiere un CharacterController.");
         }
         
-        // [NUEVO] Encuentra TODOS los objetos activos o inactivos 
-        // con el script EnemyController en la escena al inicio.
+        posicionInicialPlayer = transform.position; 
+
+        // Buscar todos los enemigos
         todosLosEnemigos = FindObjectsByType<EnemyController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        
         if (todosLosEnemigos.Length == 0)
         {
-             Debug.LogWarning("No se encontraron objetos con el script EnemyController en la escena. La reaparicion (F3) no funcionara.");
+             Debug.LogWarning("No se encontraron enemigos.");
         }
         else
         {
-             Debug.Log($"[INFO] Se encontraron {todosLosEnemigos.Length} enemigos para el sistema de reaparición (F3).");
+             Debug.Log($"[INFO] Se encontraron {todosLosEnemigos.Length} enemigos.");
+        }
+
+        // [CORREGIDO] Buscar todas las cámaras usando SurveillanceCameraController
+        todosLosCameras = FindObjectsByType<SurveillanceCameraController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (todosLosCameras.Length == 0)
+        {
+             Debug.LogWarning("No se encontraron objetos con el script SurveillanceCameraController.");
+        }
+        else
+        {
+             Debug.Log($"[INFO] Se encontraron {todosLosCameras.Length} cámaras para el sistema de reaparición (F3).");
         }
         
         vidaActual = vidaMaxima;
         velocidadActual = velocidadBase; 
         controlador.height = alturaBase;
         
-        // ¡LLAMADA INICIAL A LA UI! Muestra la vida al empezar el juego.
         ActualizarTextoVida(); 
     }
 
     void Update()
     {
+        // ----------------------------------------------------
+        // LÓGICA DE CONTROL DE MUERTE
+        // ----------------------------------------------------
+        if (estaMuerto)
+        {
+             HandleDebugKeys(); 
+             return; 
+        }
+
         // ----------------------------------------------------
         // LOGICA DE SIGILO (AGACHADO)
         // ----------------------------------------------------
@@ -81,7 +109,7 @@ public class PlayerMovement : MonoBehaviour
         }
         
         // ----------------------------------------------------
-        // LOGICA DE MOVIMIENTO (Simple, sin salto, sin correr)
+        // LOGICA DE MOVIMIENTO
         // ----------------------------------------------------
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
@@ -92,80 +120,160 @@ public class PlayerMovement : MonoBehaviour
         // Aplicar Gravedad
         velocidadVertical.y += Physics.gravity.y * Time.deltaTime;
         controlador.Move(velocidadVertical * Time.deltaTime);
-
-        // ----------------------------------------------------
-        // LOGICA DE MUERTE DEL JUGADOR
-        // ----------------------------------------------------
-        if (vidaActual <= 0)
-        {
-            Debug.Log("El jugador ha muerto!");
-            // Aqui puedes reiniciar la escena o cargar un Game Over
-        }
         
         // ----------------------------------------------------
-        // LOGICA DE REAPARICION DE TODOS LOS ENEMIGOS (F3)
+        // LOGICA DE TECLAS DE DEBUG (F1, F2, F3)
         // ----------------------------------------------------
-        if (Input.GetKeyDown(KeyCode.F3) && todosLosEnemigos != null)
+        HandleDebugKeys();
+    }
+    
+    // ===============================================
+    // MÉTODOS DE DEBUG
+    // ===============================================
+    private void HandleDebugKeys()
+    {
+        // REAPARICIÓN SOLO JUGADOR (F1)
+        if (Input.GetKeyDown(KeyCode.F1))
         {
-            // [MODIFICADO] Itera sobre el ARRAY de enemigos y llama a Reaparecer() en cada uno.
-            foreach (EnemyController enemigo in todosLosEnemigos)
+            ReaparecerPlayer();
+            Debug.Log("JUGADOR: Reaparición rápida (F1).");
+        }
+
+        // REINICIO DE ESCENA (F2)
+        if (Input.GetKeyDown(KeyCode.F2))
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            Debug.Log("SISTEMA: Reiniciando escena (F2).");
+        }
+        
+        // REAPARICION JUGADOR, ENEMIGOS Y CÁMARAS (F3)
+        if (Input.GetKeyDown(KeyCode.F3))
+        {
+            ReaparecerPlayer();
+            
+            // 1. Reaparece a todos los enemigos
+            if (todosLosEnemigos != null)
             {
-                if (enemigo != null) // Asegura que el objeto no haya sido destruido
+                foreach (EnemyController enemigo in todosLosEnemigos)
                 {
-                    enemigo.Reaparecer(); 
+                    if (enemigo != null) 
+                    {
+                        enemigo.Reaparecer(); 
+                    }
                 }
             }
-            Debug.Log("Todos los enemigos han reaparecido en su punto de origen.");
+
+            // 2. Reaparece a todas las cámaras (usando el tipo corregido)
+            if (todosLosCameras != null)
+            {
+                foreach (SurveillanceCameraController camara in todosLosCameras)
+                {
+                    if (camara != null) 
+                    {
+                        camara.Reaparecer(); 
+                    }
+                }
+            }
+            
+            Debug.Log("JUGADOR, ENEMIGOS Y CÁMARAS: Reinicio completo (F3).");
+        }
+    }
+
+    // ===============================================
+    // MÉTODOS DE ESTADO Y DAÑO
+    // ===============================================
+
+    /// <summary>
+    /// Se llama cuando el jugador recibe daño de una fuente externa (ej: EnemyController).
+    /// </summary>
+    public void RecibirDanio(float cantidad)
+    {
+        if (estaMuerto) return; 
+
+        vidaActual -= cantidad;
+        vidaActual = Mathf.Max(vidaActual, 0f); 
+        
+        Debug.Log($"Vida restante: {vidaActual}");
+        
+        ActualizarTextoVida(); 
+
+        if (vidaActual <= 0)
+        {
+            Morir();
+        }
+    }
+
+    /// <summary>
+    /// Marca al jugador como muerto y realiza las acciones pertinentes.
+    /// </summary>
+    private void Morir()
+    {
+        estaMuerto = true;
+        vidaActual = 0f; 
+        ActualizarTextoVida();
+        Debug.Log("JUGADOR: ¡El jugador ha muerto!");
+    }
+    
+    /// <summary>
+    /// Restaura la vida, el estado y la posición del jugador.
+    /// </summary>
+    private void ReaparecerPlayer()
+    {
+        // 1. Resetear estado y vida
+        vidaActual = vidaMaxima;
+        estaMuerto = false;
+        ActualizarTextoVida();
+
+        // 2. Mover el jugador a la posición inicial
+        if (controlador != null)
+        {
+            controlador.transform.position = posicionInicialPlayer; 
+            velocidadVertical = Vector3.zero; 
+        }
+        
+        // 3. Asegurarse de que no esté agachado
+        if (estaAgachado) 
+        {
+            estaAgachado = false;
+            controlador.height = alturaBase;
+            controlador.center = new Vector3(controlador.center.x, alturaBase / 2f, controlador.center.z);
+            velocidadActual = velocidadBase;
         }
     }
     
+    // ===============================================
+    // MÉTODOS DE MOVIMIENTO SECUNDARIO
+    // ===============================================
     private void AlternarAgachado()
     {
-        // Lógica de agachado original (sin ajustes de center):
         estaAgachado = !estaAgachado;
 
         if (estaAgachado)
         {
             controlador.height = alturaAgachado;
-            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaAgachado / 2f, controlador.center.z);
+            // Ajustar el centro para evitar que el jugador atraviese el suelo
+            controlador.center = new Vector3(controlador.center.x, alturaAgachado / 2f, controlador.center.z);
             velocidadActual = velocidadBase * multiplicadorSigilo; 
         }
         else
         {
             controlador.height = alturaBase;
-            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaBase / 2f, controlador.center.z);
+            // Ajustar el centro de vuelta a la normalidad
+            controlador.center = new Vector3(controlador.center.x, alturaBase / 2f, controlador.center.z);
             velocidadActual = velocidadBase;
         }
     }
-    
-    // --- Metodo de Daño (Mantenemos para que el enemigo pueda interactuar) ---
-    public void RecibirDanio(float cantidad)
-    {
-        vidaActual -= cantidad;
-        Debug.Log($"Vida restante: {vidaActual}");
-        
-        // ¡LLAMADA A LA UI! Actualiza el texto cada vez que recibes daño.
-        ActualizarTextoVida(); 
-    }
-    
+
     // ===============================================
     // MÉTODOS DE UI (Vida)
     // ===============================================
-
-    /// <summary>
-    /// Actualiza el componente de texto de la UI con la vida del jugador.
-    /// </summary>
     void ActualizarTextoVida()
     {
         if (textoVida != null)
         {
-            // Muestra la vida actual redondeada al entero más cercano, seguida de la vida máxima.
             textoVida.text = $"VIDA: {Mathf.CeilToInt(vidaActual)}/{vidaMaxima}";
-            
-            // [MODIFICADO] Aplica el color base PRIMERO.
             textoVida.color = colorBaseVida; 
             
-            // Lógica de color condicional: SOLO aplica los colores de peligro
             if (vidaActual <= 25)
             {
                 textoVida.color = Color.red;
@@ -174,7 +282,6 @@ public class PlayerMovement : MonoBehaviour
             {
                 textoVida.color = Color.yellow;
             }
-            // [ELIMINADO] el 'else' que lo forzaba a Color.white
         }
     }
 }

@@ -4,17 +4,22 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "NewSoldierData", menuName = "Enemy/Soldier Data")]
 public class Soldier : ScriptableObject
 {
-    [Header("Estadisticas Base")]
+    // Datos de combate
     public float vidaMaxima = 100f;
-    public float dañoPorContacto = 10f;
+    // CRÍTICO: Renombrado de daño a un término más general (Ataque a Distancia)
+    public float dañoDeAtaque = 10f; 
     
-    [Header("Vision y Comportamiento")]
+    // Datos de IA y Movimiento
     public float alcanceDeVision = 10f; 
-    [Range(0, 360)]
     public float mitadAnguloDeVision = 30f; 
     public float velocidadPersecucion = 3f;
+    // La distanciaAtaque se usa ahora como el rango mínimo para considerarse "cerca"
+    // para los Gizmos, aunque el ataque real usa el Raycast dentro del alcance de visión.
     public float distanciaAtaque = 1.5f; 
     
-    [Tooltip("Capas que bloquean la visión y el movimiento (paredes).")]
+    // Cadencia de disparo/ataque
+    public float tiempoEntreAtaques = 1.5f;
+    
+    // Capas que el Raycast de visión y ataque bloquearán
     public LayerMask capasBloqueo; 
 }
