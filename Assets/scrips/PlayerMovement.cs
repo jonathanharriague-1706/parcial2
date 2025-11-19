@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI; // ¡IMPORTANTE! Necesario para usar el componente Text
+using UnityEngine.SceneManagement; // <-- Necesario para reiniciar la escena (F2)
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -7,8 +8,12 @@ public class PlayerMovement : MonoBehaviour
     // REQUERIDO: REFERENCIAS DE JUEGO
     // ===============================================
     [Header("Referencias de Juego")]
-    // [MODIFICADO] Ahora es un ARRAY para almacenar a TODOS los enemigos de la escena.
+    // Array para almacenar a TODOS los enemigos de la escena.
     private EnemyController[] todosLosEnemigos; 
+
+    // <--- AÑADIDO: Variable para el requisito F1 --->
+    private Vector3 posicionInicialPlayer; 
+    // <--- FIN AÑADIDO: Variable para el requisito F1 --->
 
     // ===============================================
     // Configuración de MOVIMIENTO y SIGILO (Requisitos Parcial 2)
@@ -32,15 +37,15 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("El componente Text de Unity para mostrar la vida actual.")]
     public Text textoVida; 
     
-    // [NUEVO] Color base para la vida (puedes poner violeta aquí en el Inspector)
+    // Color base para la vida
     [Tooltip("Color base del texto de vida cuando está por encima del 50%.")]
     public Color colorBaseVida = Color.white; // Configúralo como violeta en Unity
     
     // ===============================================
-    // CRÍTICO: ESTADO DE MUERTE (Soluciona error CS1061)
+    // CRÍTICO: ESTADO DE MUERTE
     // ===============================================
     [HideInInspector] 
-    public bool estaMuerto = false; // <--- ¡Variable añadida para que EnemyController la pueda leer!
+    public bool estaMuerto = false; 
 
     // --- Variables de Control Interno ---
     private bool estaAgachado = false; 
@@ -55,8 +60,10 @@ public class PlayerMovement : MonoBehaviour
             Debug.LogError("PlayerMovement requiere un CharacterController.");
         }
         
-        // [NUEVO] Encuentra TODOS los objetos activos o inactivos 
-        // con el script EnemyController en la escena al inicio.
+        // Guarda la posición inicial del jugador para F1
+        posicionInicialPlayer = transform.position; 
+        
+        // Encuentra TODOS los objetos con el script EnemyController en la escena al inicio.
         todosLosEnemigos = FindObjectsByType<EnemyController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         
         if (todosLosEnemigos.Length == 0)
@@ -72,91 +79,120 @@ public class PlayerMovement : MonoBehaviour
         velocidadActual = velocidadBase; 
         controlador.height = alturaBase;
         
-        // ¡LLAMADA INICIAL A LA UI! Muestra la vida al empezar el juego.
         ActualizarTextoVida(); 
     }
 
     void Update()
     {
         // ----------------------------------------------------
-        // LÓGICA DE CONTROL DE MUERTE (Para evitar movimiento al morir)
+        // LÓGICA DE CONTROL DE MUERTE (Permite depuración incluso muerto)
         // ----------------------------------------------------
         if (estaMuerto)
         {
-             // Si está muerto, no permite el movimiento ni agacharse, solo chequea F3 si lo deseas
-             // Puedes añadir aqui la lógica de Game Over si lo prefieres
-             if (Input.GetKeyDown(KeyCode.F3)) {
-                 // Reiniciar el estado del jugador si usas F3 para revivirlo
-                 ReaparecerPlayer(); 
-             }
+             // Si está muerto, solo chequea las teclas de depuración.
+             if (Input.GetKeyDown(KeyCode.F3)) { HandleF3Debug(); }
+             if (Input.GetKeyDown(KeyCode.F1)) { ReaparecerPlayer(); }
+             if (Input.GetKeyDown(KeyCode.F2)) { HandleF2Debug(); }
              return; 
         }
 
         // ----------------------------------------------------
-        // LOGICA DE SIGILO (AGACHADO)
+        // LOGICA DE SIGILO, MOVIMIENTO Y MUERTE (Original)
         // ----------------------------------------------------
         if (Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.LeftControl))
         {
             AlternarAgachado();
         }
         
-        // ----------------------------------------------------
-        // LOGICA DE MOVIMIENTO (Simple, sin salto, sin correr)
-        // ----------------------------------------------------
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
 
         Vector3 movimiento = transform.right * x + transform.forward * z;
         controlador.Move(movimiento * velocidadActual * Time.deltaTime);
 
-        // Aplicar Gravedad
         velocidadVertical.y += Physics.gravity.y * Time.deltaTime;
         controlador.Move(velocidadVertical * Time.deltaTime);
 
-        // ----------------------------------------------------
-        // LOGICA DE MUERTE DEL JUGADOR
-        // ----------------------------------------------------
         if (vidaActual <= 0)
         {
             Morir();
-            // Ya no es necesario el Debug.Log aquí, está en Morir()
         }
         
         // ----------------------------------------------------
-        // LOGICA DE REAPARICION DE TODOS LOS ENEMIGOS (F3)
+        // LOGICA DE DEPURACIÓN (F1, F2, F3)
         // ----------------------------------------------------
-        if (Input.GetKeyDown(KeyCode.F3) && todosLosEnemigos != null)
+
+        // F1: Reaparecer jugador en punto de inicio con vida y balas recargadas
+        if (Input.GetKeyDown(KeyCode.F1))
         {
-            // [MODIFICADO] Itera sobre el ARRAY de enemigos y llama a Reaparecer() en cada uno.
+            ReaparecerPlayer(); 
+            Debug.Log("DEBUG: Jugador reaparecido en inicio (F1).");
+        }
+        
+        // F2: Reiniciar toda la escena
+        if (Input.GetKeyDown(KeyCode.F2))
+        {
+            HandleF2Debug();
+        }
+
+        // F3: Reaparición de solo enemigos
+        if (Input.GetKeyDown(KeyCode.F3))
+        {
+            HandleF3Debug();
+        }
+    }
+    
+    // ===============================================
+    // MÉTODOS DE DEPURACIÓN
+    // ===============================================
+    
+    /// <summary>
+    /// Reinicia toda la escena actual. (F2)
+    /// </summary>
+    private void HandleF2Debug()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        Debug.Log("DEBUG: Escena Reiniciada (F2).");
+    }
+
+    /// <summary>
+    /// Reaparece a todos los enemigos a sus puntos iniciales. (F3)
+    /// </summary>
+    private void HandleF3Debug()
+    {
+        // 1. Reaparición de Enemigos SOLAMENTE
+        if (todosLosEnemigos != null)
+        {
             foreach (EnemyController enemigo in todosLosEnemigos)
             {
-                if (enemigo != null) // Asegura que el objeto no haya sido destruido
+                if (enemigo != null) 
                 {
                     // Asumiendo que EnemyController tiene el método Reaparecer()
                     enemigo.Reaparecer(); 
                 }
             }
-            // También reaparece al jugador (si se desea)
-            ReaparecerPlayer(); 
-            Debug.Log("Todos los enemigos y el jugador han reaparecido.");
         }
+        
+        Debug.Log("DEBUG: Solo enemigos reaparecidos (F3).");
     }
     
+    // ===============================================
+    // MÉTODOS DE JUGADOR
+    // ===============================================
+
     private void AlternarAgachado()
     {
-        // Lógica de agachado original (sin ajustes de center):
+        // Lógica de agachado original
         estaAgachado = !estaAgachado;
 
         if (estaAgachado)
         {
             controlador.height = alturaAgachado;
-            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaAgachado / 2f, controlador.center.z);
             velocidadActual = velocidadBase * multiplicadorSigilo; 
         }
         else
         {
             controlador.height = alturaBase;
-            // FALTA: controlador.center = new Vector3(controlador.center.x, alturaBase / 2f, controlador.center.z);
             velocidadActual = velocidadBase;
         }
     }
@@ -166,54 +202,63 @@ public class PlayerMovement : MonoBehaviour
     /// </summary>
     private void Morir()
     {
-        if (estaMuerto) return; // Evitar morir dos veces
+        if (estaMuerto) return; 
 
         estaMuerto = true;
         vidaActual = 0f; 
         ActualizarTextoVida();
         
-        // Desactivar el controlador y el GameObject para simular la "muerte"
         if (controlador != null && controlador.enabled) 
         {
              controlador.enabled = false;
         }
-        // Puedes desactivar el GameObject si quieres que desaparezca visualmente
-        // gameObject.SetActive(false); 
-
         Debug.Log("JUGADOR: ¡El jugador ha muerto!");
     }
     
     /// <summary>
-    /// Resetea el estado del jugador a "vivo".
+    /// Resetea el estado del jugador a "vivo", lo teletransporta a la posición inicial, 
+    /// y recarga vida y balas. (F1)
     /// </summary>
     public void ReaparecerPlayer()
     {
+        // 1. Resetear el estado y vida
         estaMuerto = false;
         vidaActual = vidaMaxima;
+        
+        // ** PENDIENTE DE CONEXIÓN: Recarga de Balas/Munición **
+        // Si tienes un script de munición (ej: WeaponController), deberías llamar aquí:
+        // GetComponent<WeaponController>().RecargarMunicionCompleta();
+        
         ActualizarTextoVida();
         
-        // Reactivar el controlador y el GameObject si estaban desactivados
-        if (controlador != null && !controlador.enabled) 
+        // 2. Teletransporte Seguro al Inicio
+        if (controlador != null)
         {
+             // Desactivar CharacterController para moverlo directamente
+             controlador.enabled = false;
+             
+             // Teletransportar a la posición inicial guardada en Start()
+             transform.position = posicionInicialPlayer; 
+             velocidadVertical = Vector3.zero; // Resetear la gravedad/velocidad vertical
+             
+             // Reactivar CharacterController
              controlador.enabled = true;
         }
-        gameObject.SetActive(true);
         
-        // [OPCIONAL] Teletransportar a un punto seguro si es necesario
-        // transform.position = posicionInicialPlayer; 
+        // Reactivar el GameObject si estaba desactivado
+        gameObject.SetActive(true);
     }
     
-    // --- Metodo de Daño (Mantenemos para que el enemigo pueda interactuar) ---
+    // --- Metodo de Daño ---
     public void RecibirDanio(float cantidad)
     {
-        if (estaMuerto) return; // No recibir daño si ya está muerto
+        if (estaMuerto) return; 
 
         vidaActual -= cantidad;
-        vidaActual = Mathf.Max(vidaActual, 0f); // Asegura que la vida no baje de 0
+        vidaActual = Mathf.Max(vidaActual, 0f); 
         
         Debug.Log($"Vida restante: {vidaActual}");
         
-        // ¡LLAMADA A LA UI! Actualiza el texto cada vez que recibes daño.
         ActualizarTextoVida(); 
     }
     
@@ -228,13 +273,13 @@ public class PlayerMovement : MonoBehaviour
     {
         if (textoVida != null)
         {
-            // Muestra la vida actual redondeada al entero más cercano, seguida de la vida máxima.
+            // Muestra la vida actual redondeada al entero más cercano.
             textoVida.text = $"VIDA: {Mathf.CeilToInt(vidaActual)}/{vidaMaxima}";
             
-            // [MODIFICADO] Aplica el color base PRIMERO.
+            // Aplica el color base
             textoVida.color = colorBaseVida; 
             
-            // Lógica de color condicional: SOLO aplica los colores de peligro
+            // Lógica de color condicional: aplica los colores de peligro
             if (vidaActual <= 25)
             {
                 textoVida.color = Color.red;
