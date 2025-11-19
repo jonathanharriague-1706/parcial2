@@ -16,7 +16,7 @@ MonoBehaviour:
   "da\xF1oPorContacto": 10
   rangoVision: 15
   anguloVision: 180
-  velocidadPersecucion: 6
+  velocidadPersecucion: 5
   distanciaAtaque: 1.5
   capasBloqueo:
     serializedVersion: 2

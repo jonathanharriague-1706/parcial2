@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI; // Necesario para trabajar con la clase Image (la mira)
+using System.Collections; // Necesario para usar Coroutines (la recarga)
 
 public class GunController : MonoBehaviour
 {
@@ -15,9 +16,21 @@ public class GunController : MonoBehaviour
     [Tooltip("Referencia a la imagen de la reticula en el Canvas.")]
     public Image reticulaImagen; // Variable para conectar la mira
     
+    // ===============================================
+    // NUEVAS VARIABLES DE MUNICIÓN Y RECARGA
+    // ===============================================
+    [Header("Municion y Recarga")]
+    [Tooltip("Máximo de balas por cargador.")]
+    public int balasPorCargador = 15;
+    [Tooltip("Tiempo que tarda la recarga en segundos.")]
+    public float tiempoRecarga = 1.5f;
+
     // --- Variables de Control Interno ---
     private float siguienteTiempoDisparo = 0f;
     private Camera tpsCamera; 
+    
+    private int balasActuales;
+    private bool estaRecargando = false;
     
     void Start()
     {
@@ -26,21 +39,49 @@ public class GunController : MonoBehaviour
         {
             Debug.LogError("GunController: No se encontro la camara etiquetada como 'MainCamera'.");
         }
+        
+        // Inicializa el cargador lleno
+        balasActuales = balasPorCargador;
     }
 
     void Update()
     {
+        // Bloquea cualquier acción si el arma está recargando
+        if (estaRecargando) return;
+
         ActualizarReticula(); // Llama a la logica de cambio de color
         
-        // Disparo al apretar Click Izquierdo (Fire1)
+        // 1. Lógica de Disparo (Click Izquierdo / Fire1)
         if (Input.GetButtonDown("Fire1") && Time.time >= siguienteTiempoDisparo)
         {
-            Disparar();
-            siguienteTiempoDisparo = Time.time + cadencia; 
+            if (balasActuales > 0)
+            {
+                Disparar();
+                siguienteTiempoDisparo = Time.time + cadencia; 
+            }
+            else
+            {
+                // El cargador está vacío: Bloqueamos el disparo.
+                Debug.Log("¡Cargador vacío! Presiona R para recargar.");
+            }
+        }
+        
+        // 2. Lógica de Recarga (Tecla R)
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            // Solo se puede recargar si el cargador NO está lleno
+            if (balasActuales < balasPorCargador)
+            {
+                Recargar();
+            }
+            else
+            {
+                Debug.Log("Cargador lleno. No necesita recargar.");
+            }
         }
     }
 
-    // Metodo para cambiar el color de la mira (feedback)
+    // Método para cambiar el color de la mira (feedback)
     void ActualizarReticula()
     {
         // Si no hay camara o no hay reticula asignada, salimos
@@ -72,6 +113,10 @@ public class GunController : MonoBehaviour
     
     void Disparar()
     {
+        // Consumir una bala del cargador
+        balasActuales--; 
+        Debug.Log($"Balas restantes: {balasActuales}");
+        
         RaycastHit hit;
         
         if (tpsCamera != null && Physics.Raycast(tpsCamera.transform.position, tpsCamera.transform.forward, out hit, rango))
@@ -86,5 +131,29 @@ public class GunController : MonoBehaviour
                 targetEnemy.RecibirDanio(danio);
             }
         }
+    }
+    
+    // ===============================================
+    // LÓGICA DE RECARGA
+    // ===============================================
+    void Recargar()
+    {
+        // Iniciamos la coroutine de recarga
+        StartCoroutine(RecargarConRetraso());
+    }
+
+    // Coroutine para manejar el tiempo de recarga
+    IEnumerator RecargarConRetraso()
+    {
+        estaRecargando = true;
+        Debug.Log("Iniciando recarga...");
+
+        // Esperamos el tiempo de recarga
+        yield return new WaitForSeconds(tiempoRecarga);
+
+        // Recarga completa
+        balasActuales = balasPorCargador; // Cargadores ilimitados (siempre recarga a full)
+        estaRecargando = false;
+        Debug.Log("Recarga completa. Balas actuales: " + balasActuales);
     }
 }

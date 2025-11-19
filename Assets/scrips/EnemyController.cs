@@ -12,7 +12,7 @@ public class EnemyController : MonoBehaviour
     public TextMesh textoEstadoUI; 
     
     // --- Variables de Control Interno ---
-    private Vector3 posicionInicial;
+    private Vector3 posicionInicial; // ALMACENA la posición de inicio
     private PlayerMovement jugador; 
     private EnemyState estadoActual = EnemyState.Normal;
     
@@ -37,6 +37,7 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        // CRÍTICO: Guardamos la posición inicial DEL ENEMIGO en el momento en que inicia la escena.
         posicionInicial = transform.position; 
         vidaActual = datosSoldado.vidaMaxima;
         
@@ -110,7 +111,6 @@ public class EnemyController : MonoBehaviour
         else if (estadoActual != EnemyState.Normal)
         {
             // Transición a Normal si no hay visión, no está en Chase, y no está en daño visual.
-            // Esto solo pasa si el enemigo nunca detectó al jugador o después de una reaparición.
             ActualizarEstado(EnemyState.Normal);
         }
         
@@ -123,7 +123,7 @@ public class EnemyController : MonoBehaviour
     }
     
     // ===========================================
-    // FUNCIÓN CRÍTICA: VISIÓN CLARA (Ahora ignora el rango si está en CHASE/DAMAGE)
+    // FUNCIÓN CRÍTICA: VISIÓN CLARA
     // ===========================================
     bool JugadorEnConoDeVisionClara()
     {
@@ -133,17 +133,16 @@ public class EnemyController : MonoBehaviour
         Vector3 direccionAlJugador = (posicionJugadorCentrada - posicionOjosEnemigo).normalized;
         float distanciaAlJugador = Vector3.Distance(posicionOjosEnemigo, posicionJugadorCentrada);
 
-        // **CRÍTICO:** Rango Ilimitado (1000f) si ya está persiguiendo o en daño visual.
-        // Si está en Normal, usa el rango de visión configurado.
+        // Rango Ilimitado (1000f) si ya está persiguiendo o en daño visual.
         float rangoDeChequeo = (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0) 
-            ? 1000f // Rango prácticamente infinito para persecución.
-            : datosSoldado.rangoVision; // Rango limitado para detección inicial.
+            ? 1000f 
+            : datosSoldado.rangoVision; 
         
         if (distanciaAlJugador > rangoDeChequeo) return false; 
 
         float angulo = Vector3.Angle(transform.forward, direccionAlJugador);
         
-        // **CRÍTICO:** El ángulo solo importa si está en estado Normal.
+        // El ángulo solo importa si está en estado Normal.
         if (estadoActual == EnemyState.Chase || estadoActual == EnemyState.Damage || tiempoDañoVisual > 0 || angulo < datosSoldado.anguloVision / 2f)
         {
             RaycastHit hit;
@@ -151,7 +150,6 @@ public class EnemyController : MonoBehaviour
             // Raycast SÓLO busca la capa de Bloqueo ('detectable')
             if (Physics.Raycast(posicionOjosEnemigo, direccionAlJugador, out hit, distanciaAlJugador, datosSoldado.capasBloqueo))
             {
-                // La visión se pierde ÚNICAMENTE por una obstrucción.
                 Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * hit.distance, Color.red, 0.1f);
                 return false; 
             }
@@ -205,15 +203,20 @@ public class EnemyController : MonoBehaviour
         gameObject.SetActive(false); 
     }
     
+    // **FUNCIÓN CRÍTICA DE REAPARICIÓN**
     public void Reaparecer()
     {
         if (!gameObject.activeSelf)
         {
             gameObject.SetActive(true); 
         }
+        
+        // Restablece la posición al punto de inicio guardado en Start().
         transform.position = posicionInicial; 
+        
         vidaActual = datosSoldado.vidaMaxima; 
         ActualizarEstado(EnemyState.Normal, true); 
+        // Es importante resetear la velocidad vertical (gravedad) para evitar que se caiga.
         velocidadVertical = Vector3.zero; 
         Debug.Log("Enemigo Reiniciado a la Posición Inicial.");
     }
