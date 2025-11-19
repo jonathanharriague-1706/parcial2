@@ -1,34 +1,31 @@
 using UnityEngine;
-using TMPro; // Necesario para usar TextMeshPro
 
 public class EnemyController : MonoBehaviour
 {
     // ===========================================
-    // SCRIPTABLE OBJECT DE DATOS
+    // SCRIPTABLE OBJECT Y UI (TEXT MESH)
     // ===========================================
     [Header("Configuracion de Datos")]
-    [Tooltip("Asigna el Scriptable Object Soldier aquí.")]
     public Soldier datosSoldado;
     
-    // ===========================================
-    // UI Y ESTADOS
-    // ===========================================
     [Header("UI de Estado")]
-    // CRÍTICO: La variable es AHORA PRIVADA y se asignará automáticamente en Start()
-    private TextMeshProUGUI textoEstadoUI; 
+    public TextMesh textoEstadoUI; 
     
     // --- Variables de Control Interno ---
     private Vector3 posicionInicial;
     private PlayerMovement jugador; 
     private EnemyState estadoActual = EnemyState.Normal;
     
-    // VARIABLES DE COLISIÓN Y GRAVEDAD:
+    // VARIABLES DE MOVIMIENTO Y DAÑO
     private CharacterController controlador; 
     public float gravedad = -9.81f;
-    private Vector3 velocidadVertical;
     public float rangoColisionFrontal = 0.2f; 
-
+    private Vector3 velocidadVertical;
     private float vidaActual;
+    
+    // Control del color de daño (temporal, SOLO visual, NO detiene el movimiento)
+    private float tiempoDañoVisual = 0f; 
+    public float duracionDañoVisual = 0.2f; 
 
     public enum EnemyState { Normal, Chase, Damage, Dead }
 
@@ -49,56 +46,64 @@ public class EnemyController : MonoBehaviour
         controlador = GetComponent<CharacterController>(); 
         if (controlador == null) Debug.LogError("ERROR: EnemyController requiere un CharacterController.");
         
-        // CRÍTICO: Asignación automática por código (busca el componente en los hijos)
-        textoEstadoUI = GetComponentInChildren<TextMeshProUGUI>();
-        if (textoEstadoUI == null)
-        {
-            Debug.LogError("ERROR: No se encontró el componente TextMeshProUGUI en los hijos del enemigo.");
-        }
+        if (textoEstadoUI == null) Debug.LogError("ERROR: El componente Text Mesh no está asignado en el Inspector.");
         
-        ActualizarEstado(EnemyState.Normal);
+        ActualizarEstado(EnemyState.Normal, true); 
     }
 
     void Update()
     {
         if (jugador == null || estadoActual == EnemyState.Dead) return;
+        
+        // 1. Manejo del tiempo visual de daño
+        bool enDañoVisual = tiempoDañoVisual > 0;
+        if (enDañoVisual)
+        {
+            tiempoDañoVisual -= Time.deltaTime;
+        }
 
-        // Aplicar Gravedad (Necesario para CharacterController)
-        if (controlador.isGrounded)
-        {
-            velocidadVertical.y = -0.5f; 
-        }
-        else
-        {
-            velocidadVertical.y += gravedad * Time.deltaTime;
-        }
+        // 2. Aplicar Gravedad
+        if (controlador.isGrounded) velocidadVertical.y = -0.5f; 
+        else velocidadVertical.y += gravedad * Time.deltaTime;
         controlador.Move(velocidadVertical * Time.deltaTime);
         
-        // LÓGICA DE PERSECUCIÓN PERSISTENTE Y DETECCIÓN
-        bool jugadorDetectado = JugadorEnConoDeVision();
-
-        if (estadoActual == EnemyState.Chase || jugadorDetectado)
+        // 3. LÓGICA DE DETECCIÓN Y TRANSICIÓN 
+        
+        bool jugadorTieneVisionClara = JugadorEnConoDeVisionClara(); 
+        
+        // Si el enemigo está en CHASE O si acaba de salir de un daño visual (y la visión es clara)
+        if (jugadorTieneVisionClara || estadoActual == EnemyState.Chase || enDañoVisual)
         {
-            ActualizarEstado(EnemyState.Chase);
+            // Lógica de Detención CRÍTICA:
+            // Si el enemigo está persiguiendo Y la visión CLARA se pierde Y el efecto visual terminó.
+            if (estadoActual == EnemyState.Chase && !jugadorTieneVisionClara && !enDañoVisual)
+            {
+                ActualizarEstado(EnemyState.Normal);
+                return; // Detiene la persecución.
+            }
+
+            // Lógica de Persecución:
+            // Si la persecución debe continuar (visión clara o estaba en Chase/Damage)
+            
+            // Si el efecto visual terminó, volvemos a CHASE. Si no ha terminado, se queda en DAMAGE.
+            if (!enDañoVisual)
+            {
+                ActualizarEstado(EnemyState.Chase);
+            }
+            // Si enDañoVisual es true, el estado se mantiene en DAMAGE para el color amarillo.
+            
             PerseguirJugador();
             
-            // Lógica de Daño al Jugador
-            if (Vector3.Distance(transform.position, jugador.transform.position) <= datosSoldado.distanciaAtaque)
-            {
-                jugador.RecibirDanio(datosSoldado.dañoPorContacto * Time.deltaTime);
-                
-                // NOTA IMPORTANTE: Si tienes errores sobre 'PenalizaStamina', 'DetenerRegeneracion', etc.,
-                // significa que esos métodos deben ser implementados en PlayerMovement.cs o eliminados aquí.
-                // Ejemplo de código que causa error si no existe en PlayerMovement:
-                // jugador.PenalizaStamina(datosSoldado.dañoPorContacto); 
-            }
+            // Lógica de Daño al Jugador (Ataque)
+            // ...
         }
-        else
+        else if (estadoActual != EnemyState.Normal)
         {
+            // Transición a Normal si no hay visión y no está persiguiendo (detección inicial).
             ActualizarEstado(EnemyState.Normal);
         }
-
-        // LÓGICA DE LA UI DE ESTADO (Billboard: Mira a la cámara)
+        
+        // 4. LÓGICA DE LA UI DE ESTADO (Billboard)
         if (textoEstadoUI != null)
         {
             textoEstadoUI.transform.LookAt(Camera.main.transform);
@@ -107,36 +112,44 @@ public class EnemyController : MonoBehaviour
     }
     
     // ===========================================
-    // FUNCION CRÍTICA: VISIÓN Y RAYCAST (Obstrucción)
+    // FUNCIÓN CRÍTICA: VISIÓN CLARA
     // ===========================================
-    bool JugadorEnConoDeVision()
+    bool JugadorEnConoDeVisionClara()
     {
-        Vector3 posicionOjosEnemigo = transform.position + Vector3.up * 1.5f; 
+        Vector3 posicionOjosEnemigo = transform.position + Vector3.up * 1.8f; 
         Vector3 posicionJugadorCentrada = jugador.transform.position + Vector3.up * 0.9f; 
 
         Vector3 direccionAlJugador = (posicionJugadorCentrada - posicionOjosEnemigo).normalized;
         float distanciaAlJugador = Vector3.Distance(posicionOjosEnemigo, posicionJugadorCentrada);
 
-        if (distanciaAlJugador > datosSoldado.rangoVision) return false; 
+        // Si estamos persiguiendo, usamos un rango grande (100f) para chequear obstrucción.
+        float rangoDeChequeo = (estadoActual == EnemyState.Chase || tiempoDañoVisual > 0) ? 100f : datosSoldado.rangoVision;
+        
+        if (distanciaAlJugador > rangoDeChequeo) return false; 
 
         float angulo = Vector3.Angle(transform.forward, direccionAlJugador);
-        if (angulo < datosSoldado.anguloVision / 2f)
+        
+        // El ángulo solo importa si NO estamos persiguiendo.
+        if (estadoActual == EnemyState.Chase || tiempoDañoVisual > 0 || angulo < datosSoldado.anguloVision / 2f)
         {
             RaycastHit hit;
-            if (Physics.Raycast(posicionOjosEnemigo, direccionAlJugador, out hit, datosSoldado.rangoVision, datosSoldado.capasBloqueo))
+            
+            // Raycast SÓLO busca la capa de Bloqueo ('detectable')
+            if (Physics.Raycast(posicionOjosEnemigo, direccionAlJugador, out hit, distanciaAlJugador, datosSoldado.capasBloqueo))
             {
-                if (hit.transform.root.GetComponent<PlayerMovement>() != jugador)
-                {
-                    return false; // Vista bloqueada por un obstáculo.
-                }
+                Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * hit.distance, Color.red, 0.1f);
+                return false; 
             }
-            return true;
+            
+            Debug.DrawRay(posicionOjosEnemigo, direccionAlJugador * distanciaAlJugador, Color.green, 0.1f);
+            return true; 
         }
+        
         return false; 
     }
     
     // ===========================================
-    // FUNCION CRÍTICA: PERSECUCIÓN (Colisión rígida)
+    // FUNCION CRÍTICA: PERSECUCIÓN (Movimiento)
     // ===========================================
     void PerseguirJugador()
     {
@@ -145,35 +158,32 @@ public class EnemyController : MonoBehaviour
         Vector3 posicionSinY = new Vector3(jugador.transform.position.x, transform.position.y, jugador.transform.position.z);
         transform.LookAt(posicionSinY); 
         
-        // Detección de Colisión Frontal (Raycast preventivo)
         RaycastHit hit;
         if (Physics.Raycast(transform.position, transform.forward, out hit, controlador.radius + rangoColisionFrontal, datosSoldado.capasBloqueo))
         {
-            if (hit.transform.root.GetComponent<PlayerMovement>() != jugador)
-            {
-                Debug.DrawRay(transform.position, transform.forward * hit.distance, Color.red);
-                return; // Detiene el movimiento
-            }
+            Debug.DrawRay(transform.position, transform.forward * hit.distance, Color.red);
+            return; 
         }
         
         controlador.Move(direccionHaciaJugador * datosSoldado.velocidadPersecucion * Time.deltaTime);
     }
     
     // ===========================================
-    // FUNCIÓN: RECIBIR DAÑO (Llamado desde GunController)
+    // FUNCIONES DE VIDA Y ESTADO
     // ===========================================
     public void RecibirDanio(float cantidad)
     {
         if (estadoActual == EnemyState.Dead) return;
         vidaActual -= cantidad;
         vidaActual = Mathf.Max(vidaActual, 0f); 
+        
+        // CRÍTICO: Solo se usa la variable para el feedback visual/estado, no para detener el movimiento.
+        tiempoDañoVisual = duracionDañoVisual; 
         ActualizarEstado(EnemyState.Damage); 
-
-        if (vidaActual <= 0)
-        {
-            Morir();
-        }
+        
+        if (vidaActual <= 0) Morir();
     }
+    // ... (El resto de las funciones Morir, Reaparecer y ActualizarEstado siguen igual) ...
 
     void Morir()
     {
@@ -189,16 +199,13 @@ public class EnemyController : MonoBehaviour
             gameObject.SetActive(true); 
             transform.position = posicionInicial; 
             vidaActual = datosSoldado.vidaMaxima; 
-            ActualizarEstado(EnemyState.Normal); 
+            ActualizarEstado(EnemyState.Normal, true); 
         }
     }
     
-    // ===========================================
-    // FUNCIÓN CRÍTICA: ACTUALIZAR ESTADO Y UI
-    // ===========================================
-    void ActualizarEstado(EnemyState nuevoEstado)
+    void ActualizarEstado(EnemyState nuevoEstado, bool force = false)
     {
-        if (estadoActual != nuevoEstado)
+        if (estadoActual != nuevoEstado || force)
         {
             estadoActual = nuevoEstado;
             
@@ -212,7 +219,7 @@ public class EnemyController : MonoBehaviour
                         textoEstadoUI.color = Color.green;
                         break;
                     case EnemyState.Chase:
-                        textoEstadoUI.color = Color.red; 
+                        textoEstadoUI.color = Color.red;
                         break;
                     case EnemyState.Damage:
                         textoEstadoUI.color = Color.yellow;
@@ -227,6 +234,6 @@ public class EnemyController : MonoBehaviour
     
     private void OnDrawGizmosSelected()
     {
-        // ... (Lógica de dibujo de Gizmos)
+        // Lógica para dibujar el cono de visión
     }
 }
