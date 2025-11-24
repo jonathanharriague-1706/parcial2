@@ -13,11 +13,12 @@ MonoBehaviour:
   m_Name: enemigo3
   m_EditorClassIdentifier: 
   vidaMaxima: 100
-  "da\xF1oPorContacto": 10
+  "da\xF1oDeAtaque": 20
   alcanceDeVision: 10
   mitadAnguloDeVision: 30
   velocidadPersecucion: 5
-  distanciaAtaque: 1.5
+  distanciaAtaque: 10
+  tiempoEntreAtaques: 1.5
   capasBloqueo:
     serializedVersion: 2
     m_Bits: 128
